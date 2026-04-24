@@ -73,6 +73,38 @@
       padding: 28px 0 60px;
     }
 
+    .api-banner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      background: linear-gradient(180deg, rgba(0, 102, 255, 0.14), rgba(255, 255, 255, 0.03));
+      border: 1px solid rgba(125, 178, 255, 0.26);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .api-banner-copy {
+      flex: 1 1 260px;
+    }
+
+    .api-banner-copy strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .api-banner .field-group {
+      min-width: min(320px, 100%);
+      flex: 1 1 320px;
+    }
+
+    .api-banner-status {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
     .hero {
       display: grid;
       grid-template-columns: 1.25fr 0.75fr;
@@ -980,6 +1012,7 @@
 </head>
 <body>
   <div class="app-shell">
+    <div id="apiKeyBanner"></div>
     <section class="hero">
       <div class="hero-panel">
         <div class="eyebrow">Engineering Procurement Intelligence</div>
@@ -1233,7 +1266,7 @@
     </section>
   </div>
 
-  <div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-overlay hidden" id="loadingOverlay">
     <div class="loading-card">
       <div class="eyebrow">Analysis Engine Active</div>
       <h3>Processing BOM intelligence</h3>
@@ -1773,13 +1806,14 @@ Return valid JSON only.`;
     }
 
     async function runAiAnalysis(rows, label) {
-      if (CONFIG.OPENAI_API_KEY.trim()) {
+      const sessionApiKey = sessionStorage.getItem("oai_key") || "";
+      if (sessionApiKey.trim()) {
         try {
           const response = await fetch(CONFIG.OPENAI_URL, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${CONFIG.OPENAI_API_KEY}`
+              Authorization: `Bearer ${sessionApiKey}`
             },
             body: JSON.stringify({
               model: CONFIG.MODEL,
@@ -2479,7 +2513,7 @@ Return valid JSON only.`;
       renderManualRows("A", DEMO_BOM);
       state.results.B = null;
       state.comparison = null;
-      analyzeBom();
+      return analyzeBom();
     }
 
     function clearCurrentData() {
@@ -2520,8 +2554,6 @@ Return valid JSON only.`;
     }
 
     function setupButtons() {
-      document.getElementById("analyzeBtn").addEventListener("click", analyzeBom);
-      document.getElementById("demoBtn").addEventListener("click", loadDemoBom);
       document.getElementById("clearBtn").addEventListener("click", clearCurrentData);
       document.getElementById("exportCsvBtn").addEventListener("click", exportEnhancedCsv);
       document.getElementById("reportBtn").addEventListener("click", openReportModal);
@@ -2544,5 +2576,6 @@ Return valid JSON only.`;
 
     init();
   </script>
+  <script src="app.js"></script>
 </body>
 </html>
