@@ -1,0 +1,2548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ProcureAI | BOM Cost Intelligence</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --bg-elev: #22243a;
+      --bg-soft: #2c304d;
+      --panel: rgba(255, 255, 255, 0.04);
+      --panel-strong: rgba(255, 255, 255, 0.08);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f5f7ff;
+      --muted: #a8b2d1;
+      --accent: #0066ff;
+      --accent-soft: rgba(0, 102, 255, 0.18);
+      --success: #20c997;
+      --warn: #f7b500;
+      --danger: #ff5c7a;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+      --radius: 18px;
+      --radius-sm: 12px;
+      --font-sans: "Segoe UI", Arial, sans-serif;
+      --font-mono: "Courier New", "Roboto Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(0, 102, 255, 0.18), transparent 26%),
+        radial-gradient(circle at top right, rgba(32, 201, 151, 0.08), transparent 18%),
+        linear-gradient(180deg, #131424 0%, var(--bg) 45%, #121321 100%);
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      opacity: 0.35;
+      mask-image: radial-gradient(circle at center, black 35%, transparent 92%);
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    .app-shell {
+      width: min(1500px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 60px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.25fr 0.75fr;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .hero-panel,
+    .status-panel,
+    .panel {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.03));
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero-panel {
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-panel::after {
+      content: "";
+      position: absolute;
+      inset: auto -60px -60px auto;
+      width: 220px;
+      height: 220px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(0, 102, 255, 0.4), transparent 70%);
+      filter: blur(12px);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: #7db2ff;
+      margin-bottom: 12px;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 26px;
+      height: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 12px rgba(0, 102, 255, 0.9);
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2.2rem, 5vw, 4.1rem);
+      line-height: 0.94;
+      letter-spacing: -0.04em;
+    }
+
+    .hero-copy {
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 1rem;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+
+    .hero-actions,
+    .toolbar,
+    .summary-grid,
+    .card-grid,
+    .alternatives-grid,
+    .risk-grid,
+    .export-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .hero-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .mini-stat,
+    .status-panel,
+    .summary-card,
+    .driver-card,
+    .alternative-card,
+    .risk-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+    }
+
+    .mini-stat {
+      padding: 14px 16px;
+    }
+
+    .mini-stat-label,
+    .label,
+    .section-subtitle,
+    .mapping-hint,
+    .delta-tag {
+      color: var(--muted);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .mini-stat-value,
+    .metric-value {
+      margin-top: 6px;
+      font-size: 1.35rem;
+      font-weight: 700;
+    }
+
+    .status-panel {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .status-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .app-grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 22px;
+    }
+
+    .panel h2,
+    .panel h3,
+    .modal-sheet h2 {
+      margin: 0 0 8px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .panel-header p,
+    .section-intro {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .toggle-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+    }
+
+    .toggle-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .inputs-layout {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 18px;
+    }
+
+    .inputs-layout.compare {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .input-panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.02);
+      min-width: 0;
+    }
+
+    .input-panel-header {
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.025);
+    }
+
+    .panel-kicker {
+      color: #8ebeff;
+      font-size: 0.76rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .tab-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 16px 20px 0;
+    }
+
+    .tab-btn,
+    .chip-btn,
+    .primary-btn,
+    .secondary-btn,
+    .ghost-btn,
+    .danger-btn,
+    .icon-btn {
+      border: 1px solid transparent;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, opacity 0.18s ease;
+    }
+
+    .tab-btn {
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+
+    .tab-btn.active {
+      background: linear-gradient(180deg, rgba(0, 102, 255, 0.28), rgba(0, 102, 255, 0.18));
+      border-color: rgba(125, 178, 255, 0.45);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    }
+
+    .tab-content {
+      padding: 20px;
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.24s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .drop-zone {
+      border: 1.5px dashed rgba(125, 178, 255, 0.45);
+      border-radius: 16px;
+      padding: 34px 20px;
+      text-align: center;
+      background:
+        linear-gradient(180deg, rgba(0, 102, 255, 0.14), rgba(255, 255, 255, 0.02)),
+        rgba(255, 255, 255, 0.02);
+      transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+    }
+
+    .drop-zone.dragging {
+      border-color: #8dc1ff;
+      transform: translateY(-2px);
+      background:
+        linear-gradient(180deg, rgba(0, 102, 255, 0.22), rgba(255, 255, 255, 0.04)),
+        rgba(255, 255, 255, 0.04);
+    }
+
+    .drop-zone h4 {
+      margin: 0 0 8px;
+      font-size: 1.1rem;
+    }
+
+    .drop-zone p {
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .mapping-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 14px;
+      border: 1px solid var(--line);
+    }
+
+    .field-group {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.9rem;
+      color: #dbe3ff;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    select,
+    textarea {
+      width: 100%;
+      background: rgba(8, 11, 25, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 12px;
+      color: var(--text);
+      padding: 12px 14px;
+      outline: none;
+    }
+
+    input:focus,
+    select:focus,
+    textarea:focus {
+      border-color: rgba(125, 178, 255, 0.6);
+      box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
+    }
+
+    textarea {
+      min-height: 180px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .primary-btn,
+    .secondary-btn,
+    .ghost-btn,
+    .danger-btn {
+      padding: 12px 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .primary-btn {
+      background: linear-gradient(180deg, #1676ff, #0054db);
+      border-color: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 30px rgba(0, 102, 255, 0.28);
+    }
+
+    .secondary-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--line);
+    }
+
+    .ghost-btn {
+      background: transparent;
+      border-color: var(--line);
+    }
+
+    .danger-btn {
+      background: rgba(255, 92, 122, 0.14);
+      border-color: rgba(255, 92, 122, 0.3);
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      display: inline-grid;
+      place-items: center;
+      background: rgba(255, 92, 122, 0.12);
+      color: #ffd7df;
+      border-color: rgba(255, 92, 122, 0.24);
+    }
+
+    .primary-btn:hover,
+    .secondary-btn:hover,
+    .ghost-btn:hover,
+    .danger-btn:hover,
+    .tab-btn:hover,
+    .icon-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .manual-table,
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+    }
+
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(0, 0, 0, 0.16);
+    }
+
+    .table-wrap.compact {
+      max-height: 410px;
+    }
+
+    th,
+    td {
+      padding: 11px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: #252948;
+      font-size: 0.82rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    tr:nth-child(even) td {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    td input,
+    td select {
+      min-width: 110px;
+      padding: 10px 12px;
+    }
+
+    .mono {
+      font-family: var(--font-mono);
+      letter-spacing: 0.01em;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .chip-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .chip,
+    .confidence-chip,
+    .risk-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.78rem;
+      line-height: 1;
+      white-space: nowrap;
+      border: 1px solid transparent;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .confidence-high {
+      background: rgba(32, 201, 151, 0.16);
+      color: #92f0cf;
+      border-color: rgba(32, 201, 151, 0.28);
+    }
+
+    .confidence-medium {
+      background: rgba(247, 181, 0, 0.16);
+      color: #ffe08b;
+      border-color: rgba(247, 181, 0, 0.28);
+    }
+
+    .confidence-low {
+      background: rgba(255, 92, 122, 0.16);
+      color: #ffbecb;
+      border-color: rgba(255, 92, 122, 0.28);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .summary-card {
+      padding: 16px;
+    }
+
+    .metric-value {
+      font-size: clamp(1.2rem, 2vw, 1.9rem);
+    }
+
+    .results-layout {
+      display: grid;
+      gap: 18px;
+    }
+
+    .chart-panel {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .chart-canvas-wrap {
+      min-height: 320px;
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--line);
+    }
+
+    .breakdown-list {
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .breakdown-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--line);
+    }
+
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .driver-card,
+    .alternative-card,
+    .risk-card {
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .driver-card::before,
+    .alternative-card::before,
+    .risk-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto auto 0;
+      width: 100%;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), transparent);
+    }
+
+    .driver-card h4,
+    .alternative-card h4,
+    .risk-card h4 {
+      margin: 0 0 10px;
+      font-size: 1.1rem;
+    }
+
+    .driver-card p,
+    .alternative-card p,
+    .risk-card p,
+    .report-block p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .callout-cost {
+      font-family: var(--font-mono);
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .savings-tag,
+    .delta-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(0, 102, 255, 0.14);
+      color: #a5c8ff;
+      border: 1px solid rgba(125, 178, 255, 0.22);
+      font-size: 0.82rem;
+      width: fit-content;
+    }
+
+    .alternatives-grid,
+    .risk-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .risk-card.high::before {
+      background: linear-gradient(90deg, var(--danger), transparent);
+    }
+
+    .risk-card.medium::before {
+      background: linear-gradient(90deg, var(--warn), transparent);
+    }
+
+    .risk-card.low::before {
+      background: linear-gradient(90deg, var(--success), transparent);
+    }
+
+    .disclaimer {
+      border-radius: 14px;
+      padding: 14px 16px;
+      background: rgba(247, 181, 0, 0.09);
+      border: 1px solid rgba(247, 181, 0, 0.22);
+      color: #ffe9aa;
+      line-height: 1.5;
+    }
+
+    .loading-overlay,
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .loading-overlay.active,
+    .modal.active {
+      display: flex;
+    }
+
+    .loading-overlay {
+      background: rgba(10, 12, 21, 0.72);
+      backdrop-filter: blur(10px);
+    }
+
+    .loading-card {
+      width: min(560px, calc(100vw - 32px));
+      padding: 28px;
+      border-radius: 24px;
+      border: 1px solid rgba(125, 178, 255, 0.24);
+      background: linear-gradient(180deg, rgba(35, 40, 68, 0.94), rgba(19, 21, 37, 0.96));
+      box-shadow: var(--shadow);
+    }
+
+    .loading-card h3 {
+      margin: 0 0 8px;
+      font-size: 1.55rem;
+    }
+
+    .loading-card p {
+      margin: 0 0 18px;
+      color: var(--muted);
+    }
+
+    .progress-shell {
+      height: 13px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0e8bff, #20c997);
+      box-shadow: 0 0 30px rgba(0, 102, 255, 0.6);
+      transition: width 0.4s ease;
+    }
+
+    .loading-meta {
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .modal {
+      background: rgba(10, 12, 21, 0.72);
+      padding: 20px;
+      align-items: flex-start;
+      overflow: auto;
+    }
+
+    .modal-sheet {
+      width: min(980px, 100%);
+      margin: 32px auto;
+      background: #f9fbff;
+      color: #101526;
+      border-radius: 22px;
+      box-shadow: 0 35px 80px rgba(0, 0, 0, 0.4);
+      overflow: hidden;
+    }
+
+    .modal-toolbar {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      background: #e8eefc;
+      border-bottom: 1px solid #d5def6;
+    }
+
+    .modal-toolbar button {
+      color: #101526;
+    }
+
+    .report {
+      padding: 28px;
+    }
+
+    .report-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      border-bottom: 2px solid #d9e3fb;
+      padding-bottom: 16px;
+      margin-bottom: 18px;
+    }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .report-block {
+      border: 1px solid #d9e3fb;
+      border-radius: 16px;
+      padding: 16px;
+      background: #ffffff;
+      break-inside: avoid;
+    }
+
+    .report-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+
+    .report-table th,
+    .report-table td {
+      position: static;
+      background: transparent;
+      padding: 8px 0;
+      border-bottom: 1px solid #e7ecfb;
+      color: #101526;
+    }
+
+    .delta-overview {
+      display: grid;
+      gap: 14px;
+    }
+
+    .delta-summary {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .delta-card {
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .delta-added {
+      color: #8df0c9;
+    }
+
+    .delta-removed {
+      color: #ffbbc8;
+    }
+
+    .delta-changed {
+      color: #ffe08b;
+    }
+
+    .delta-neutral {
+      color: #a5c8ff;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .empty-state {
+      padding: 32px 18px;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .chart-panel,
+      .inputs-layout.compare,
+      .summary-grid,
+      .card-grid,
+      .alternatives-grid,
+      .risk-grid,
+      .delta-summary {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-stats,
+      .mapping-grid,
+      .report-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .app-shell {
+        width: min(100vw - 18px, 100%);
+        padding-top: 18px;
+      }
+
+      .hero-panel,
+      .status-panel,
+      .panel {
+        padding: 18px;
+      }
+
+      .tab-bar,
+      .tab-content {
+        padding-left: 14px;
+        padding-right: 14px;
+      }
+
+      .loading-meta {
+        flex-direction: column;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      body * {
+        visibility: hidden;
+      }
+
+      .modal.active,
+      .modal.active * {
+        visibility: visible;
+      }
+
+      .modal {
+        position: absolute;
+        inset: 0;
+        background: #ffffff;
+        padding: 0;
+      }
+
+      .modal-toolbar {
+        display: none;
+      }
+
+      .modal-sheet {
+        width: 100%;
+        max-width: none;
+        box-shadow: none;
+        border-radius: 0;
+        margin: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <section class="hero">
+      <div class="hero-panel">
+        <div class="eyebrow">Engineering Procurement Intelligence</div>
+        <h1>ProcureAI</h1>
+        <p class="hero-copy">
+          AI-powered BOM cost intelligence for engineering students and small project teams. Parse supplier-ready bills of materials, estimate costs, surface risks, compare revisions, and generate a polished procurement summary in one place.
+        </p>
+        <div class="hero-actions">
+          <button class="primary-btn" id="demoBtn">Load Demo BOM</button>
+          <button class="secondary-btn" id="analyzeBtn">Analyze BOM</button>
+          <button class="ghost-btn" id="clearBtn">Clear Current Data</button>
+        </div>
+        <div class="hero-stats">
+          <div class="mini-stat">
+            <div class="mini-stat-label">Input Modes</div>
+            <div class="mini-stat-value">CSV / Manual / Paste</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Analysis Engine</div>
+            <div class="mini-stat-value">OpenAI `gpt-4o`</div>
+          </div>
+          <div class="mini-stat">
+            <div class="mini-stat-label">Output Focus</div>
+            <div class="mini-stat-value">Cost, Risk, Savings</div>
+          </div>
+        </div>
+      </div>
+      <aside class="status-panel">
+        <div>
+          <div class="label">Mission Snapshot</div>
+          <h3>Faster BOM decisions with less quote-chasing.</h3>
+          <p class="section-intro">Built for dense engineering data entry, quick what-if comparisons, and review-ready procurement reporting.</p>
+        </div>
+        <div class="status-list">
+          <div class="status-item">
+            <span>CSV Column Mapping</span>
+            <strong id="statusMapping">Ready</strong>
+          </div>
+          <div class="status-item">
+            <span>Comparison Mode</span>
+            <strong id="statusCompare">Off</strong>
+          </div>
+          <div class="status-item">
+            <span>Analysis Source</span>
+            <strong id="statusSource">Demo-ready</strong>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2>BOM Input Workspace</h2>
+          <p>Import, type, or paste structured material lists. Enable comparison mode to evaluate BOM revisions side by side.</p>
+        </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="compareToggle" />
+          <span>Compare Two BOMs</span>
+        </label>
+      </div>
+
+      <div class="inputs-layout" id="inputsLayout">
+        <div class="input-panel" data-panel="A">
+          <div class="input-panel-header">
+            <div class="panel-kicker">Primary BOM</div>
+            <h3>BOM A</h3>
+          </div>
+          <div class="tab-bar">
+            <button class="tab-btn active" data-panel="A" data-tab="csv">CSV Upload</button>
+            <button class="tab-btn" data-panel="A" data-tab="manual">Manual Entry</button>
+            <button class="tab-btn" data-panel="A" data-tab="paste">Paste Table</button>
+          </div>
+
+          <div class="tab-content active" data-panel="A" data-content="csv">
+            <div class="drop-zone" id="dropZoneA">
+              <h4>Drop BOM CSV here</h4>
+              <p>Or choose a file. PapaParse will preview the sheet and help you map columns.</p>
+              <input type="file" id="csvInputA" accept=".csv,text/csv" class="hidden" />
+              <button class="secondary-btn" data-file-btn="A">Choose CSV File</button>
+            </div>
+            <div id="mappingSectionA" class="hidden"></div>
+            <div id="csvPreviewSectionA" class="hidden"></div>
+          </div>
+
+          <div class="tab-content" data-panel="A" data-content="manual">
+            <div class="table-wrap compact">
+              <table class="manual-table">
+                <thead>
+                  <tr>
+                    <th>Part Number</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Unit</th>
+                    <th>Material / Category</th>
+                    <th>Notes</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="manualRowsA"></tbody>
+              </table>
+            </div>
+            <div class="btn-row">
+              <button class="secondary-btn" data-add-row="A">Add Row</button>
+            </div>
+          </div>
+
+          <div class="tab-content" data-panel="A" data-content="paste">
+            <div class="field-group">
+              <label for="pasteAreaA">Paste tab-separated or comma-separated BOM data</label>
+              <textarea id="pasteAreaA" placeholder="Part Number	Description	Quantity	Unit	Material	Notes"></textarea>
+            </div>
+            <div class="btn-row">
+              <button class="secondary-btn" data-parse-paste="A">Parse Pasted Table</button>
+            </div>
+            <div id="pastePreviewSectionA" class="hidden"></div>
+          </div>
+        </div>
+
+        <div class="input-panel hidden" data-panel="B" id="panelB">
+          <div class="input-panel-header">
+            <div class="panel-kicker">Comparison BOM</div>
+            <h3>BOM B</h3>
+          </div>
+          <div class="tab-bar">
+            <button class="tab-btn active" data-panel="B" data-tab="csv">CSV Upload</button>
+            <button class="tab-btn" data-panel="B" data-tab="manual">Manual Entry</button>
+            <button class="tab-btn" data-panel="B" data-tab="paste">Paste Table</button>
+          </div>
+
+          <div class="tab-content active" data-panel="B" data-content="csv">
+            <div class="drop-zone" id="dropZoneB">
+              <h4>Drop BOM CSV here</h4>
+              <p>Upload a second BOM to compare adds, removals, and cost deltas.</p>
+              <input type="file" id="csvInputB" accept=".csv,text/csv" class="hidden" />
+              <button class="secondary-btn" data-file-btn="B">Choose CSV File</button>
+            </div>
+            <div id="mappingSectionB" class="hidden"></div>
+            <div id="csvPreviewSectionB" class="hidden"></div>
+          </div>
+
+          <div class="tab-content" data-panel="B" data-content="manual">
+            <div class="table-wrap compact">
+              <table class="manual-table">
+                <thead>
+                  <tr>
+                    <th>Part Number</th>
+                    <th>Description</th>
+                    <th>Quantity</th>
+                    <th>Unit</th>
+                    <th>Material / Category</th>
+                    <th>Notes</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="manualRowsB"></tbody>
+              </table>
+            </div>
+            <div class="btn-row">
+              <button class="secondary-btn" data-add-row="B">Add Row</button>
+            </div>
+          </div>
+
+          <div class="tab-content" data-panel="B" data-content="paste">
+            <div class="field-group">
+              <label for="pasteAreaB">Paste tab-separated or comma-separated BOM data</label>
+              <textarea id="pasteAreaB" placeholder="Part Number	Description	Quantity	Unit	Material	Notes"></textarea>
+            </div>
+            <div class="btn-row">
+              <button class="secondary-btn" data-parse-paste="B">Parse Pasted Table</button>
+            </div>
+            <div id="pastePreviewSectionB" class="hidden"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="resultsSection">
+      <div class="panel-header">
+        <div>
+          <h2>AI Cost Analysis Results</h2>
+          <p>Enhanced BOM pricing, category breakdowns, cost drivers, substitution ideas, and procurement risk flags.</p>
+        </div>
+        <div class="export-actions">
+          <button class="secondary-btn" id="exportCsvBtn">Export Enhanced BOM as CSV</button>
+          <button class="primary-btn" id="reportBtn">Generate Procurement Summary</button>
+        </div>
+      </div>
+
+      <div class="results-layout">
+        <div class="summary-grid" id="summaryGrid"></div>
+        <div id="comparisonSummary" class="hidden"></div>
+
+        <div class="panel" style="padding:0; background:transparent; border:none; box-shadow:none;">
+          <div class="panel-header" style="padding:0;">
+            <div>
+              <h3>Enhanced BOM Table</h3>
+              <p class="section-intro">Original BOM structure enriched with estimated unit cost, totals, suppliers, lead time, and confidence level.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="resultsTable"></table>
+          </div>
+        </div>
+
+        <div class="chart-panel">
+          <div class="chart-canvas-wrap">
+            <canvas id="breakdownChart"></canvas>
+          </div>
+          <div>
+            <h3>Cost Breakdown by Category</h3>
+            <p class="section-intro">Animated category-level cost concentration helps teams spot where budget exposure clusters.</p>
+            <div class="breakdown-list" id="breakdownList"></div>
+          </div>
+        </div>
+
+        <div>
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div>
+              <h3>Top Cost Drivers</h3>
+              <p class="section-intro">Highest-value components with a practical savings lever for each.</p>
+            </div>
+          </div>
+          <div class="card-grid" id="costDrivers"></div>
+        </div>
+
+        <div>
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div>
+              <h3>Smart Alternatives</h3>
+              <p class="section-intro">Substitution opportunities balancing price, availability, and performance tradeoffs.</p>
+            </div>
+          </div>
+          <div class="alternatives-grid" id="alternativesPanel"></div>
+        </div>
+
+        <div>
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div>
+              <h3>Procurement Risks</h3>
+              <p class="section-intro">Supply chain, lead time, and volatility concerns prioritized for action.</p>
+            </div>
+          </div>
+          <div class="risk-grid" id="risksPanel"></div>
+        </div>
+
+        <div class="disclaimer">
+          Cost estimates are AI-generated approximations. Verify with actual supplier quotes before purchasing.
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-card">
+      <div class="eyebrow">Analysis Engine Active</div>
+      <h3>Processing BOM intelligence</h3>
+      <p>The app is simulating procurement workflows while the analysis runs.</p>
+      <div class="progress-shell">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div class="loading-meta">
+        <span id="loadingMessage">Querying supplier databases...</span>
+        <span id="loadingPercent">0%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="reportModal">
+    <div class="modal-sheet">
+      <div class="modal-toolbar">
+        <div>
+          <strong>Procurement Summary</strong>
+          <div class="muted">Print-ready one-page engineering sourcing report</div>
+        </div>
+        <div class="toolbar">
+          <button class="secondary-btn" id="printBtn">Print Report</button>
+          <button class="ghost-btn" id="closeModalBtn">Close</button>
+        </div>
+      </div>
+      <div class="report" id="reportContent"></div>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      OPENAI_API_KEY: "",
+      MODEL: "gpt-4o",
+      OPENAI_URL: "https://api.openai.com/v1/chat/completions"
+    };
+
+    const APP_FIELDS = ["partNumber", "description", "quantity", "unit", "material", "notes"];
+    const FIELD_LABELS = {
+      partNumber: "Part Number",
+      description: "Description",
+      quantity: "Quantity",
+      unit: "Unit",
+      material: "Material / Category",
+      notes: "Notes"
+    };
+    const UNIT_OPTIONS = ["each", "ft", "m", "kg", "lb", "in", "L", "set"];
+    const MATERIAL_OPTIONS = ["Steel", "Aluminum", "Plastic", "Electronic", "Fastener", "Hydraulic", "Electrical", "Other"];
+    const LOADING_MESSAGES = [
+      "Querying supplier databases...",
+      "Estimating lead times...",
+      "Calculating cost drivers...",
+      "Flagging procurement risks..."
+    ];
+    const DEMO_BOM = [
+      { partNumber: "HC-2.0-STR", description: "Hydraulic cylinder, 2 in bore x 8 in stroke", quantity: 1, unit: "each", material: "Hydraulic", notes: "Main actuation assembly" },
+      { partNumber: "SV-24V-3W", description: "24V DC 3-way solenoid valve", quantity: 1, unit: "each", material: "Hydraulic", notes: "Directional flow control" },
+      { partNumber: "PS-1600", description: "Pressure sensor, 0-1600 psi", quantity: 1, unit: "each", material: "Electronic", notes: "Feedback sensor to PLC" },
+      { partNumber: "AL-6061-PLT", description: "6061 aluminum mounting plate 12 x 8 x 0.5 in", quantity: 1, unit: "each", material: "Aluminum", notes: "Machined manifold mount" },
+      { partNumber: "PLC-IO-8", description: "Compact PLC control module, 8 I/O", quantity: 1, unit: "each", material: "Electrical", notes: "Core controller" },
+      { partNumber: "FS-M6-SS", description: "M6 stainless socket head fastener kit", quantity: 16, unit: "each", material: "Fastener", notes: "Mounting hardware" },
+      { partNumber: "TUBE-PU-6", description: "Polyurethane hydraulic tubing, 6 mm", quantity: 4, unit: "m", material: "Plastic", notes: "Fluid routing lines" },
+      { partNumber: "FIT-ELB-6", description: "Push-to-connect elbow fitting, 6 mm", quantity: 6, unit: "each", material: "Hydraulic", notes: "Tubing interface fittings" }
+    ];
+
+    const state = {
+      compareMode: false,
+      activeTabs: { A: "csv", B: "csv" },
+      bomData: { A: [], B: [] },
+      csvRaw: { A: [], B: [] },
+      csvHeaders: { A: [], B: [] },
+      csvMapping: { A: {}, B: {} },
+      results: { A: null, B: null },
+      comparison: null,
+      loadingTimer: null,
+      loadingMessageTimer: null,
+      chart: null,
+      lastSource: "Demo-ready"
+    };
+
+    function currency(value) {
+      const num = Number(value) || 0;
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(num);
+    }
+
+    function normalizeText(value) {
+      return String(value ?? "").trim();
+    }
+
+    function toNumber(value, fallback = 0) {
+      const cleaned = String(value ?? "").replace(/[^0-9.\-]/g, "");
+      const parsed = Number(cleaned);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function confidenceClass(confidence) {
+      const normalized = String(confidence || "").toLowerCase();
+      if (normalized === "high") return "confidence-high";
+      if (normalized === "medium") return "confidence-medium";
+      return "confidence-low";
+    }
+
+    function inferRiskSeverity(text) {
+      const value = String(text || "").toLowerCase();
+      if (value.includes("single source") || value.includes("volatile") || value.includes("long lead")) return "high";
+      if (value.includes("inventory") || value.includes("calibration") || value.includes("availability")) return "medium";
+      return "low";
+    }
+
+    function overallConfidence(items) {
+      const scoreMap = { High: 3, Medium: 2, Low: 1 };
+      if (!items?.length) return "N/A";
+      const average = items.reduce((sum, item) => sum + (scoreMap[item.costConfidence] || 1), 0) / items.length;
+      if (average >= 2.6) return "High";
+      if (average >= 1.8) return "Medium";
+      return "Low";
+    }
+
+    function sanitizeRow(row) {
+      return {
+        partNumber: normalizeText(row.partNumber),
+        description: normalizeText(row.description),
+        quantity: Math.max(0, toNumber(row.quantity, 1)),
+        unit: UNIT_OPTIONS.includes(row.unit) ? row.unit : (normalizeText(row.unit) || "each"),
+        material: MATERIAL_OPTIONS.includes(row.material) ? row.material : (normalizeText(row.material) || "Other"),
+        notes: normalizeText(row.notes)
+      };
+    }
+
+    function rowHasMeaningfulData(row) {
+      return Boolean(normalizeText(row.partNumber) || normalizeText(row.description) || normalizeText(row.notes) || toNumber(row.quantity) > 0);
+    }
+
+    function getCurrentRows(panel) {
+      const activeTab = state.activeTabs[panel];
+      if (activeTab === "manual") {
+        return collectManualRows(panel);
+      }
+      return (state.bomData[panel] || []).filter(rowHasMeaningfulData).map(sanitizeRow);
+    }
+
+    function setRows(panel, rows, sourceTab) {
+      const cleaned = (rows || []).map(sanitizeRow).filter(rowHasMeaningfulData);
+      state.bomData[panel] = cleaned;
+      if (sourceTab) {
+        state.activeTabs[panel] = sourceTab;
+        setActiveTab(panel, sourceTab);
+      }
+      if (sourceTab === "manual") {
+        renderManualRows(panel, cleaned.length ? cleaned : createEmptyRows(3));
+      }
+      renderPreviewSection(panel, `${sourceTab || "manual"}PreviewSection`, cleaned, sourceTab === "paste" ? "Parsed Pasted BOM" : "Preview");
+    }
+
+    function createEmptyRows(count) {
+      return Array.from({ length: count }, () => ({
+        partNumber: "",
+        description: "",
+        quantity: 1,
+        unit: "each",
+        material: "Steel",
+        notes: ""
+      }));
+    }
+
+    function initManualTables() {
+      renderManualRows("A", createEmptyRows(3));
+      renderManualRows("B", createEmptyRows(3));
+    }
+
+    function renderManualRows(panel, rows) {
+      const tbody = document.getElementById(`manualRows${panel}`);
+      tbody.innerHTML = "";
+      rows.forEach((row, index) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><input type="text" data-field="partNumber" value="${escapeHtml(row.partNumber || "")}" placeholder="Optional" /></td>
+          <td><input type="text" data-field="description" value="${escapeHtml(row.description || "")}" placeholder="Required item description" /></td>
+          <td><input type="number" min="0" step="any" data-field="quantity" value="${row.quantity ?? 1}" /></td>
+          <td>${selectMarkup("unit", UNIT_OPTIONS, row.unit || "each")}</td>
+          <td>${selectMarkup("material", MATERIAL_OPTIONS, row.material || "Steel")}</td>
+          <td><input type="text" data-field="notes" value="${escapeHtml(row.notes || "")}" placeholder="Notes, tolerance, source hints" /></td>
+          <td><button class="icon-btn" title="Delete row" data-delete-row="${panel}" data-index="${index}">×</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function selectMarkup(field, options, selected) {
+      const optionsMarkup = options.map(option => `<option value="${option}" ${option === selected ? "selected" : ""}>${option}</option>`).join("");
+      return `<select data-field="${field}">${optionsMarkup}</select>`;
+    }
+
+    function collectManualRows(panel) {
+      const tbody = document.getElementById(`manualRows${panel}`);
+      const rows = [...tbody.querySelectorAll("tr")].map(tr => {
+        const row = {};
+        tr.querySelectorAll("[data-field]").forEach(input => {
+          row[input.dataset.field] = input.value;
+        });
+        return sanitizeRow(row);
+      }).filter(rowHasMeaningfulData);
+      state.bomData[panel] = rows;
+      return rows;
+    }
+
+    function addManualRow(panel, initialRow = null) {
+      const current = collectManualRows(panel);
+      current.push(sanitizeRow(initialRow || {
+        partNumber: "",
+        description: "",
+        quantity: 1,
+        unit: "each",
+        material: "Steel",
+        notes: ""
+      }));
+      renderManualRows(panel, current);
+      state.activeTabs[panel] = "manual";
+    }
+
+    function removeManualRow(panel, index) {
+      const current = collectManualRows(panel);
+      current.splice(index, 1);
+      renderManualRows(panel, current.length ? current : createEmptyRows(1));
+      state.bomData[panel] = current;
+    }
+
+    function escapeHtml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function setActiveTab(panel, tab) {
+      state.activeTabs[panel] = tab;
+      document.querySelectorAll(`.tab-btn[data-panel="${panel}"]`).forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.tab === tab);
+      });
+      document.querySelectorAll(`.tab-content[data-panel="${panel}"]`).forEach(content => {
+        content.classList.toggle("active", content.dataset.content === tab);
+      });
+    }
+
+    function setupTabs() {
+      document.querySelectorAll(".tab-btn").forEach(button => {
+        button.addEventListener("click", () => setActiveTab(button.dataset.panel, button.dataset.tab));
+      });
+    }
+
+    function setupFileInputs() {
+      document.querySelectorAll("[data-file-btn]").forEach(button => {
+        button.addEventListener("click", () => {
+          document.getElementById(`csvInput${button.dataset.fileBtn}`).click();
+        });
+      });
+
+      ["A", "B"].forEach(panel => {
+        const input = document.getElementById(`csvInput${panel}`);
+        const dropZone = document.getElementById(`dropZone${panel}`);
+        input.addEventListener("change", event => {
+          const file = event.target.files?.[0];
+          if (file) parseCsvFile(panel, file);
+        });
+
+        ["dragenter", "dragover"].forEach(type => {
+          dropZone.addEventListener(type, event => {
+            event.preventDefault();
+            dropZone.classList.add("dragging");
+          });
+        });
+        ["dragleave", "drop"].forEach(type => {
+          dropZone.addEventListener(type, event => {
+            event.preventDefault();
+            dropZone.classList.remove("dragging");
+          });
+        });
+        dropZone.addEventListener("drop", event => {
+          const file = event.dataTransfer.files?.[0];
+          if (file) parseCsvFile(panel, file);
+        });
+      });
+    }
+
+    function parseCsvFile(panel, file) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: results => {
+          const data = results.data || [];
+          const headers = results.meta.fields || Object.keys(data[0] || {});
+          state.csvRaw[panel] = data;
+          state.csvHeaders[panel] = headers;
+          state.csvMapping[panel] = autoDetectMapping(headers);
+          renderMappingSection(panel);
+          updateStatus("statusMapping", "Mapped");
+        },
+        error: () => {
+          alert("Unable to parse that CSV file. Please verify the format and try again.");
+        }
+      });
+    }
+
+    function autoDetectMapping(headers) {
+      const headerList = headers || [];
+      const patterns = {
+        partNumber: ["part number", "part #", "part", "pn", "sku", "item no"],
+        description: ["description", "item description", "component", "part description", "name"],
+        quantity: ["qty", "quantity", "count"],
+        unit: ["unit", "uom", "unit of measure"],
+        material: ["material", "category", "type", "commodity"],
+        notes: ["notes", "comment", "remarks", "spec", "details"]
+      };
+
+      return Object.fromEntries(APP_FIELDS.map(field => {
+        const match = headerList.find(header => patterns[field].some(pattern => header.toLowerCase().includes(pattern)));
+        return [field, match || ""];
+      }));
+    }
+
+    function renderMappingSection(panel) {
+      const container = document.getElementById(`mappingSection${panel}`);
+      const headers = state.csvHeaders[panel];
+      const mapping = state.csvMapping[panel];
+      container.classList.remove("hidden");
+      container.innerHTML = `
+        <div class="mapping-grid">
+          ${APP_FIELDS.map(field => `
+            <div class="field-group">
+              <label>${FIELD_LABELS[field]}</label>
+              <select data-mapping-panel="${panel}" data-field="${field}">
+                <option value="">Not mapped</option>
+                ${headers.map(header => `<option value="${escapeHtml(header)}" ${mapping[field] === header ? "selected" : ""}>${escapeHtml(header)}</option>`).join("")}
+              </select>
+            </div>
+          `).join("")}
+        </div>
+        <div class="btn-row">
+          <span class="mapping-hint">Confirm column mapping before loading the BOM preview.</span>
+          <button class="primary-btn" data-confirm-mapping="${panel}">Confirm Mapping</button>
+        </div>
+      `;
+      container.querySelectorAll("[data-mapping-panel]").forEach(select => {
+        select.addEventListener("change", event => {
+          state.csvMapping[panel][event.target.dataset.field] = event.target.value;
+        });
+      });
+      container.querySelector(`[data-confirm-mapping="${panel}"]`).addEventListener("click", () => confirmCsvMapping(panel));
+    }
+
+    function confirmCsvMapping(panel) {
+      const mappedRows = state.csvRaw[panel].map(row => sanitizeRow({
+        partNumber: row[state.csvMapping[panel].partNumber],
+        description: row[state.csvMapping[panel].description],
+        quantity: row[state.csvMapping[panel].quantity],
+        unit: row[state.csvMapping[panel].unit],
+        material: row[state.csvMapping[panel].material],
+        notes: row[state.csvMapping[panel].notes]
+      })).filter(rowHasMeaningfulData);
+      state.bomData[panel] = mappedRows;
+      state.activeTabs[panel] = "csv";
+      renderPreviewSection(panel, `csvPreviewSection${panel}`, mappedRows, "CSV Preview");
+    }
+
+    function renderPreviewSection(panel, sectionId, rows, title) {
+      const container = document.getElementById(sectionId);
+      if (!container) return;
+      if (!rows?.length) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+      }
+      container.classList.remove("hidden");
+      container.innerHTML = `
+        <div class="panel-header" style="margin:18px 0 10px;">
+          <div>
+            <h3 style="margin:0;">${escapeHtml(title)}</h3>
+            <p class="section-intro">${rows.length} line items loaded into ${panel === "A" ? "BOM A" : "BOM B"}.</p>
+          </div>
+        </div>
+        <div class="table-wrap compact">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Part Number</th>
+                <th>Description</th>
+                <th>Quantity</th>
+                <th>Unit</th>
+                <th>Material</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(row => `
+                <tr>
+                  <td class="mono">${escapeHtml(row.partNumber || "—")}</td>
+                  <td>${escapeHtml(row.description || "—")}</td>
+                  <td class="mono">${row.quantity}</td>
+                  <td>${escapeHtml(row.unit)}</td>
+                  <td>${escapeHtml(row.material)}</td>
+                  <td>${escapeHtml(row.notes || "—")}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function parsePastedTable(panel) {
+      const textarea = document.getElementById(`pasteArea${panel}`);
+      const text = textarea.value.trim();
+      if (!text) {
+        alert("Paste BOM data first.");
+        return;
+      }
+      const lines = text.split(/\r?\n/).filter(Boolean);
+      const delimiter = lines.some(line => line.includes("\t")) ? "\t" : ",";
+      const matrix = lines.map(line => splitRespectingQuotes(line, delimiter));
+      const maybeHeader = matrix[0].map(cell => cell.toLowerCase());
+      const hasHeader = maybeHeader.some(cell => ["part", "description", "qty", "quantity", "unit", "material", "notes"].some(token => cell.includes(token)));
+      const body = hasHeader ? matrix.slice(1) : matrix;
+      const rows = body.map(cells => sanitizeRow({
+        partNumber: cells[0] || "",
+        description: cells[1] || "",
+        quantity: cells[2] || 1,
+        unit: cells[3] || "each",
+        material: cells[4] || "Other",
+        notes: cells[5] || ""
+      })).filter(rowHasMeaningfulData);
+      state.bomData[panel] = rows;
+      state.activeTabs[panel] = "paste";
+      renderPreviewSection(panel, `pastePreviewSection${panel}`, rows, "Parsed Pasted BOM");
+    }
+
+    function splitRespectingQuotes(line, delimiter) {
+      const result = [];
+      let current = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i += 1) {
+        const char = line[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (char === delimiter && !inQuotes) {
+          result.push(current.trim());
+          current = "";
+        } else {
+          current += char;
+        }
+      }
+      result.push(current.trim());
+      return result;
+    }
+
+    function setupManualActions() {
+      document.querySelectorAll("[data-add-row]").forEach(button => {
+        button.addEventListener("click", () => addManualRow(button.dataset.addRow));
+      });
+      document.body.addEventListener("click", event => {
+        const target = event.target;
+        if (target.matches("[data-delete-row]")) {
+          removeManualRow(target.dataset.deleteRow, Number(target.dataset.index));
+        }
+      });
+      document.querySelectorAll("[data-parse-paste]").forEach(button => {
+        button.addEventListener("click", () => parsePastedTable(button.dataset.parsePaste));
+      });
+    }
+
+    function setupCompareMode() {
+      const toggle = document.getElementById("compareToggle");
+      toggle.addEventListener("change", event => {
+        state.compareMode = event.target.checked;
+        document.getElementById("inputsLayout").classList.toggle("compare", state.compareMode);
+        document.getElementById("panelB").classList.toggle("hidden", !state.compareMode);
+        updateStatus("statusCompare", state.compareMode ? "On" : "Off");
+      });
+    }
+
+    function updateStatus(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function buildSystemPrompt() {
+      return `You are an engineering procurement specialist. Analyze this Bill of Materials and return a JSON object with:
+  - items: array matching the input, each with added fields: { estimatedUnitCost, estimatedTotalCost, costConfidence which is 'High', 'Medium', or 'Low', commonSuppliers as an array of up to 3 supplier names such as McMaster-Carr, Grainger, Amazon, Digikey, etc., leadTimeEstimate, notes }
+  - totalEstimatedCost: number
+  - costBreakdownByCategory: array of { category, totalCost, percentage }
+  - topCostDrivers: array of 3 { partDescription, cost, savingsTip }
+  - procurementRisks: array of 2-3 risks covering supply chain, lead time, or cost volatility
+  - alternativeSuggestions: array of 2-3 { originalItem, alternativeItem, estimatedSavings, tradeoff }
+  - totalPotentialSavings: number if alternatives are adopted
+Return valid JSON only.`;
+    }
+
+    async function analyzeBom() {
+      const bomA = gatherPanelRows("A");
+      const bomB = state.compareMode ? gatherPanelRows("B") : [];
+
+      if (!bomA.length) {
+        alert("Add or load a BOM into BOM A before analysis.");
+        return;
+      }
+      if (state.compareMode && !bomB.length) {
+        alert("Comparison mode is enabled. Add or load a BOM into BOM B as well.");
+        return;
+      }
+
+      showLoading();
+      try {
+        const [resultA, resultB] = await Promise.all([
+          runAiAnalysis(bomA, "BOM A"),
+          state.compareMode ? runAiAnalysis(bomB, "BOM B") : Promise.resolve(null)
+        ]);
+        state.results.A = resultA;
+        state.results.B = resultB;
+        state.comparison = state.compareMode ? compareResults(resultA, resultB) : null;
+        renderResults();
+      } catch (error) {
+        console.error(error);
+        alert("Analysis failed. Please review your BOM data and try again.");
+      } finally {
+        hideLoading();
+      }
+    }
+
+    function gatherPanelRows(panel) {
+      const activeTab = state.activeTabs[panel];
+      if (activeTab === "manual") {
+        return collectManualRows(panel);
+      }
+      return (state.bomData[panel] || []).filter(rowHasMeaningfulData);
+    }
+
+    async function runAiAnalysis(rows, label) {
+      if (CONFIG.OPENAI_API_KEY.trim()) {
+        try {
+          const response = await fetch(CONFIG.OPENAI_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${CONFIG.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+              model: CONFIG.MODEL,
+              temperature: 0.2,
+              response_format: { type: "json_object" },
+              messages: [
+                { role: "system", content: buildSystemPrompt() },
+                { role: "user", content: JSON.stringify({ label, items: rows }) }
+              ]
+            })
+          });
+          if (!response.ok) throw new Error(`OpenAI request failed with ${response.status}`);
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          const parsed = JSON.parse(content);
+          updateStatus("statusSource", "OpenAI API");
+          state.lastSource = "OpenAI API";
+          return normalizeAnalysis(parsed, rows);
+        } catch (error) {
+          console.warn("OpenAI analysis failed, falling back to local estimator.", error);
+        }
+      }
+      updateStatus("statusSource", "Local estimator");
+      state.lastSource = "Local estimator";
+      await new Promise(resolve => setTimeout(resolve, 1200));
+      return buildFallbackAnalysis(rows);
+    }
+
+    function normalizeAnalysis(parsed, sourceRows) {
+      const items = (parsed.items || sourceRows).map((item, index) => {
+        const base = sanitizeRow(sourceRows[index] || item);
+        const unitCost = toNumber(item.estimatedUnitCost, estimateBaseCost(base));
+        const totalCost = toNumber(item.estimatedTotalCost, unitCost * base.quantity);
+        return {
+          ...base,
+          estimatedUnitCost: unitCost,
+          estimatedTotalCost: totalCost,
+          costConfidence: ["High", "Medium", "Low"].includes(item.costConfidence) ? item.costConfidence : confidenceFromMaterial(base.material),
+          commonSuppliers: Array.isArray(item.commonSuppliers) ? item.commonSuppliers.slice(0, 3) : suggestSuppliers(base),
+          leadTimeEstimate: item.leadTimeEstimate || leadTimeFromMaterial(base.material),
+          analysisNotes: item.notes || buildNote(base)
+        };
+      });
+
+      const totalEstimatedCost = toNumber(parsed.totalEstimatedCost, items.reduce((sum, item) => sum + item.estimatedTotalCost, 0));
+      const costBreakdownByCategory = (parsed.costBreakdownByCategory || deriveBreakdown(items)).map(entry => ({
+        category: entry.category,
+        totalCost: toNumber(entry.totalCost),
+        percentage: toNumber(entry.percentage)
+      }));
+
+      return {
+        items,
+        totalEstimatedCost,
+        costBreakdownByCategory: costBreakdownByCategory.length ? costBreakdownByCategory : deriveBreakdown(items),
+        topCostDrivers: Array.isArray(parsed.topCostDrivers) && parsed.topCostDrivers.length ? parsed.topCostDrivers.slice(0, 3) : deriveTopCostDrivers(items),
+        procurementRisks: Array.isArray(parsed.procurementRisks) && parsed.procurementRisks.length ? parsed.procurementRisks.slice(0, 3) : deriveRisks(items),
+        alternativeSuggestions: Array.isArray(parsed.alternativeSuggestions) && parsed.alternativeSuggestions.length ? parsed.alternativeSuggestions.slice(0, 3) : deriveAlternatives(items),
+        totalPotentialSavings: toNumber(parsed.totalPotentialSavings, deriveAlternatives(items).reduce((sum, item) => sum + toNumber(item.estimatedSavings), 0)),
+        source: state.lastSource
+      };
+    }
+
+    function buildFallbackAnalysis(rows) {
+      const items = rows.map(row => {
+        const baseCost = estimateBaseCost(row);
+        const estimatedUnitCost = roundMoney(baseCost);
+        const estimatedTotalCost = roundMoney(baseCost * row.quantity);
+        return {
+          ...row,
+          estimatedUnitCost,
+          estimatedTotalCost,
+          costConfidence: confidenceFromMaterial(row.material),
+          commonSuppliers: suggestSuppliers(row),
+          leadTimeEstimate: leadTimeFromMaterial(row.material),
+          analysisNotes: buildNote(row)
+        };
+      });
+      return {
+        items,
+        totalEstimatedCost: roundMoney(items.reduce((sum, item) => sum + item.estimatedTotalCost, 0)),
+        costBreakdownByCategory: deriveBreakdown(items),
+        topCostDrivers: deriveTopCostDrivers(items),
+        procurementRisks: deriveRisks(items),
+        alternativeSuggestions: deriveAlternatives(items),
+        totalPotentialSavings: roundMoney(deriveAlternatives(items).reduce((sum, item) => sum + toNumber(item.estimatedSavings), 0)),
+        source: "Local estimator"
+      };
+    }
+
+    function roundMoney(value) {
+      return Math.round((Number(value) || 0) * 100) / 100;
+    }
+
+    function estimateBaseCost(row) {
+      const text = `${row.partNumber} ${row.description} ${row.notes}`.toLowerCase();
+      const materialBase = {
+        Steel: 18,
+        Aluminum: 42,
+        Plastic: 6,
+        Electronic: 55,
+        Fastener: 1.2,
+        Hydraulic: 78,
+        Electrical: 48,
+        Other: 22
+      }[row.material] || 20;
+
+      let multiplier = 1;
+      if (text.includes("plc")) multiplier = 8.2;
+      else if (text.includes("sensor")) multiplier = 3.1;
+      else if (text.includes("valve")) multiplier = 4.4;
+      else if (text.includes("cylinder")) multiplier = 6.7;
+      else if (text.includes("plate")) multiplier = 2.4;
+      else if (text.includes("tubing")) multiplier = 1.35;
+      else if (text.includes("fitting")) multiplier = 1.1;
+      else if (text.includes("fastener")) multiplier = 0.75;
+
+      const unitAdjustments = {
+        each: 1,
+        ft: 0.9,
+        m: 1.1,
+        kg: 1.4,
+        lb: 1.05,
+        in: 0.2,
+        L: 1.3,
+        set: 2.2
+      };
+      const unitFactor = unitAdjustments[row.unit] || 1;
+      return materialBase * multiplier * unitFactor;
+    }
+
+    function confidenceFromMaterial(material) {
+      if (["Fastener", "Steel", "Plastic"].includes(material)) return "High";
+      if (["Aluminum", "Electrical"].includes(material)) return "Medium";
+      return "Low";
+    }
+
+    function suggestSuppliers(row) {
+      const byMaterial = {
+        Hydraulic: ["Grainger", "Motion", "McMaster-Carr"],
+        Electronic: ["DigiKey", "Mouser", "Amazon"],
+        Electrical: ["AutomationDirect", "DigiKey", "Grainger"],
+        Aluminum: ["OnlineMetals", "McMaster-Carr", "Grainger"],
+        Steel: ["McMaster-Carr", "Grainger", "Fastenal"],
+        Fastener: ["Fastenal", "McMaster-Carr", "Grainger"],
+        Plastic: ["McMaster-Carr", "Amazon", "Uline"],
+        Other: ["McMaster-Carr", "Grainger", "Amazon"]
+      };
+      return byMaterial[row.material] || byMaterial.Other;
+    }
+
+    function leadTimeFromMaterial(material) {
+      return {
+        Hydraulic: "2-4 weeks",
+        Electronic: "1-3 weeks",
+        Electrical: "1-2 weeks",
+        Aluminum: "5-10 days",
+        Steel: "3-7 days",
+        Fastener: "2-5 days",
+        Plastic: "3-6 days",
+        Other: "1-2 weeks"
+      }[material] || "1-2 weeks";
+    }
+
+    function buildNote(row) {
+      const materialNotes = {
+        Hydraulic: "Hydraulic components often vary by pressure rating and seal material.",
+        Electronic: "Electronic pricing can shift quickly with vendor inventory and calibration needs.",
+        Electrical: "Electrical control hardware may need exact voltage and I/O compatibility checks.",
+        Aluminum: "Machining tolerance and cut method can materially influence quoted price.",
+        Fastener: "Fastener pricing is stable, but finish and grade still affect lead time."
+      };
+      return materialNotes[row.material] || "Confirm dimensional tolerances and supplier availability before ordering.";
+    }
+
+    function deriveBreakdown(items) {
+      const totals = items.reduce((acc, item) => {
+        acc[item.material] = (acc[item.material] || 0) + item.estimatedTotalCost;
+        return acc;
+      }, {});
+      const grandTotal = items.reduce((sum, item) => sum + item.estimatedTotalCost, 0) || 1;
+      return Object.entries(totals).map(([category, totalCost]) => ({
+        category,
+        totalCost: roundMoney(totalCost),
+        percentage: roundMoney((totalCost / grandTotal) * 100)
+      })).sort((a, b) => b.totalCost - a.totalCost);
+    }
+
+    function deriveTopCostDrivers(items) {
+      return [...items]
+        .sort((a, b) => b.estimatedTotalCost - a.estimatedTotalCost)
+        .slice(0, 3)
+        .map(item => ({
+          partDescription: item.description,
+          cost: roundMoney(item.estimatedTotalCost),
+          savingsTip: savingsTipForItem(item)
+        }));
+    }
+
+    function savingsTipForItem(item) {
+      const text = `${item.description} ${item.notes}`.toLowerCase();
+      if (text.includes("plc")) return "Check if a lower I/O count module can cover the prototype phase.";
+      if (text.includes("cylinder")) return "Request alternate bore/stroke stock units before custom-ordering.";
+      if (text.includes("valve")) return "Compare manifold-mounted versus inline valve packages for bundled discounts.";
+      if (text.includes("sensor")) return "Review whether a lower-range sensor meets your control envelope.";
+      if (text.includes("plate")) return "Use standard stock thickness and reduce machining ops where possible.";
+      return "Consolidate sourcing and compare stocked equivalents to reduce expedited purchasing.";
+    }
+
+    function deriveRisks(items) {
+      const categories = new Set(items.map(item => item.material));
+      const risks = [];
+      if (categories.has("Hydraulic")) risks.push("Long lead risk on hydraulic control components if exact pressure or port specs are not stocked.");
+      if (categories.has("Electronic") || categories.has("Electrical")) risks.push("Control and sensing components may face inventory swings and price volatility across distributors.");
+      if (items.some(item => item.costConfidence === "Low")) risks.push("Low-confidence line items need supplier quote validation before purchase approval.");
+      return risks.slice(0, 3);
+    }
+
+    function deriveAlternatives(items) {
+      const candidates = [...items]
+        .filter(item => item.estimatedTotalCost > 20)
+        .sort((a, b) => b.estimatedTotalCost - a.estimatedTotalCost)
+        .slice(0, 3);
+      return candidates.map(item => {
+        const savings = roundMoney(item.estimatedTotalCost * (item.material === "Hydraulic" ? 0.12 : 0.08));
+        return {
+          originalItem: item.description,
+          alternativeItem: alternativeForItem(item),
+          estimatedSavings: savings,
+          tradeoff: tradeoffForItem(item)
+        };
+      });
+    }
+
+    function alternativeForItem(item) {
+      const text = item.description.toLowerCase();
+      if (text.includes("plc")) return "Compact relay controller or lower-I/O PLC variant";
+      if (text.includes("sensor")) return "Industrial analog pressure transducer with standard connector";
+      if (text.includes("valve")) return "Stocked single-manufacturer valve with standard coil";
+      if (text.includes("cylinder")) return "Standard catalog hydraulic cylinder with close-match stroke";
+      if (text.includes("plate")) return "Pre-cut aluminum tooling plate with minimal machining";
+      return `Stocked equivalent ${item.material.toLowerCase()} component`;
+    }
+
+    function tradeoffForItem(item) {
+      const text = item.description.toLowerCase();
+      if (text.includes("plc")) return "May reduce expansion capacity for future prototype iterations.";
+      if (text.includes("sensor")) return "Could slightly lower precision or connector convenience.";
+      if (text.includes("valve")) return "Might require adapting fittings or mounting geometry.";
+      if (text.includes("cylinder")) return "Packaging envelope or mounting points may need minor rework.";
+      return "Verify compatibility, ratings, and dimensional fit before substitution.";
+    }
+
+    function compareResults(resultA, resultB) {
+      const keyOf = item => normalizeText(item.partNumber) || normalizeText(item.description).toLowerCase();
+      const mapA = new Map(resultA.items.map(item => [keyOf(item), item]));
+      const mapB = new Map(resultB.items.map(item => [keyOf(item), item]));
+      const allKeys = new Set([...mapA.keys(), ...mapB.keys()]);
+      const deltas = [];
+
+      allKeys.forEach(key => {
+        const a = mapA.get(key);
+        const b = mapB.get(key);
+        if (a && !b) {
+          deltas.push({
+            type: "Removed",
+            item: a.description,
+            details: "Present in BOM A only",
+            costImpact: roundMoney(-a.estimatedTotalCost)
+          });
+        } else if (!a && b) {
+          deltas.push({
+            type: "Added",
+            item: b.description,
+            details: "Present in BOM B only",
+            costImpact: roundMoney(b.estimatedTotalCost)
+          });
+        } else if (a && b) {
+          const qtyChanged = a.quantity !== b.quantity;
+          const costChanged = Math.abs(a.estimatedTotalCost - b.estimatedTotalCost) > 0.009;
+          const materialChanged = a.material !== b.material;
+          if (qtyChanged || costChanged || materialChanged) {
+            const changes = [];
+            if (qtyChanged) changes.push(`Qty ${a.quantity} -> ${b.quantity}`);
+            if (materialChanged) changes.push(`Material ${a.material} -> ${b.material}`);
+            if (costChanged) changes.push(`Cost ${currency(a.estimatedTotalCost)} -> ${currency(b.estimatedTotalCost)}`);
+            deltas.push({
+              type: "Changed",
+              item: b.description || a.description,
+              details: changes.join(" | "),
+              costImpact: roundMoney(b.estimatedTotalCost - a.estimatedTotalCost)
+            });
+          }
+        }
+      });
+
+      return {
+        deltas,
+        totalCostDelta: roundMoney(resultB.totalEstimatedCost - resultA.totalEstimatedCost),
+        added: deltas.filter(item => item.type === "Added").length,
+        removed: deltas.filter(item => item.type === "Removed").length,
+        changed: deltas.filter(item => item.type === "Changed").length
+      };
+    }
+
+    function renderResults() {
+      const resultsSection = document.getElementById("resultsSection");
+      resultsSection.classList.remove("hidden");
+      const primary = state.results.A;
+      renderSummary(primary);
+      renderResultsTable(primary.items);
+      renderBreakdown(primary.costBreakdownByCategory);
+      renderCostDrivers(primary.topCostDrivers);
+      renderAlternatives(primary.alternativeSuggestions);
+      renderRisks(primary.procurementRisks);
+      renderComparisonSection();
+      buildReport();
+      resultsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function renderSummary(result) {
+      const overall = overallConfidence(result.items);
+      document.getElementById("summaryGrid").innerHTML = `
+        <div class="summary-card">
+          <div class="label">Total BOM Item Count</div>
+          <div class="metric-value mono">${result.items.length}</div>
+          <div class="muted">Loaded in primary BOM</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Estimated Total Cost</div>
+          <div class="metric-value mono">${currency(result.totalEstimatedCost)}</div>
+          <div class="muted">Analysis source: ${escapeHtml(result.source || state.lastSource)}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Potential Savings</div>
+          <div class="metric-value mono">${currency(result.totalPotentialSavings)}</div>
+          <div class="muted">If smart substitutions are accepted</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">Overall Confidence</div>
+          <div class="metric-value">${overall}</div>
+          <div class="muted">Weighted from line-item confidence</div>
+        </div>
+      `;
+    }
+
+    function renderResultsTable(items) {
+      const table = document.getElementById("resultsTable");
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th>Part Number</th>
+            <th>Description</th>
+            <th>Qty</th>
+            <th>Unit</th>
+            <th>Material</th>
+            <th>Notes</th>
+            <th>Est. Unit Cost</th>
+            <th>Est. Total Cost</th>
+            <th>Confidence</th>
+            <th>Suppliers</th>
+            <th>Lead Time</th>
+            <th>AI Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map(item => `
+            <tr>
+              <td class="mono">${escapeHtml(item.partNumber || "—")}</td>
+              <td>${escapeHtml(item.description)}</td>
+              <td class="mono">${item.quantity}</td>
+              <td>${escapeHtml(item.unit)}</td>
+              <td>${escapeHtml(item.material)}</td>
+              <td>${escapeHtml(item.notes || "—")}</td>
+              <td class="mono">${currency(item.estimatedUnitCost)}</td>
+              <td class="mono">${currency(item.estimatedTotalCost)}</td>
+              <td><span class="confidence-chip ${confidenceClass(item.costConfidence)}">${escapeHtml(item.costConfidence)}</span></td>
+              <td><div class="chip-list">${(item.commonSuppliers || []).map(name => `<span class="chip">${escapeHtml(name)}</span>`).join("")}</div></td>
+              <td>${escapeHtml(item.leadTimeEstimate)}</td>
+              <td>${escapeHtml(item.analysisNotes || "—")}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      `;
+    }
+
+    function renderBreakdown(breakdown) {
+      const colors = ["#0066ff", "#20c997", "#f7b500", "#ff5c7a", "#8a63ff", "#56c8ff", "#9ae66e", "#ff8a56"];
+      const ctx = document.getElementById("breakdownChart");
+      if (state.chart) state.chart.destroy();
+      state.chart = new Chart(ctx, {
+        type: "pie",
+        data: {
+          labels: breakdown.map(item => item.category),
+          datasets: [{
+            data: breakdown.map(item => item.totalCost),
+            backgroundColor: breakdown.map((_, index) => colors[index % colors.length]),
+            borderColor: "#101221",
+            borderWidth: 2,
+            hoverOffset: 12
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 1100, easing: "easeOutQuart" },
+          plugins: {
+            legend: {
+              labels: { color: "#f5f7ff" }
+            }
+          }
+        }
+      });
+      document.getElementById("breakdownList").innerHTML = breakdown.map((item, index) => `
+        <div class="breakdown-item">
+          <div>
+            <div>${escapeHtml(item.category)}</div>
+            <div class="muted">${item.percentage}% of estimated spend</div>
+          </div>
+          <div class="mono" style="color:${colors[index % colors.length]};">${currency(item.totalCost)}</div>
+        </div>
+      `).join("");
+    }
+
+    function renderCostDrivers(drivers) {
+      document.getElementById("costDrivers").innerHTML = drivers.map(driver => `
+        <article class="driver-card">
+          <div class="label">Cost Driver</div>
+          <div class="callout-cost mono">${currency(driver.cost)}</div>
+          <h4>${escapeHtml(driver.partDescription)}</h4>
+          <p>${escapeHtml(driver.savingsTip)}</p>
+          <div class="savings-tag">Optimization focus item</div>
+        </article>
+      `).join("");
+    }
+
+    function renderAlternatives(alternatives) {
+      const panel = document.getElementById("alternativesPanel");
+      if (!alternatives?.length) {
+        panel.innerHTML = `<div class="empty-state">No viable substitution opportunities were identified for the current BOM.</div>`;
+        return;
+      }
+      panel.innerHTML = alternatives.map(item => `
+        <article class="alternative-card">
+          <div class="label">Original Item</div>
+          <h4>${escapeHtml(item.originalItem)}</h4>
+          <p><strong>Alternative:</strong> ${escapeHtml(item.alternativeItem)}</p>
+          <div class="savings-tag mono">Estimated Savings ${currency(item.estimatedSavings)}</div>
+          <p style="margin-top:12px;"><strong>Tradeoff:</strong> ${escapeHtml(item.tradeoff)}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderRisks(risks) {
+      const panel = document.getElementById("risksPanel");
+      if (!risks?.length) {
+        panel.innerHTML = `<div class="empty-state">No procurement risk banners to display for this BOM.</div>`;
+        return;
+      }
+      panel.innerHTML = risks.map(risk => {
+        const severity = inferRiskSeverity(risk);
+        return `
+          <article class="risk-card ${severity}">
+            <div class="label">Risk Severity</div>
+            <h4>${severity.toUpperCase()}</h4>
+            <p>${escapeHtml(risk)}</p>
+            <div class="savings-tag">${severity === "high" ? "Escalate early" : severity === "medium" ? "Monitor closely" : "Low current concern"}</div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function renderComparisonSection() {
+      const container = document.getElementById("comparisonSummary");
+      if (!state.compareMode || !state.comparison || !state.results.B) {
+        container.classList.add("hidden");
+        container.innerHTML = "";
+        return;
+      }
+
+      container.classList.remove("hidden");
+      container.innerHTML = `
+        <div class="panel" style="padding:18px;">
+          <div class="panel-header">
+            <div>
+              <h3>BOM Comparison Mode</h3>
+              <p class="section-intro">Revision-level change tracking between BOM A and BOM B, including line-item cost impact and total delta.</p>
+            </div>
+          </div>
+          <div class="delta-overview">
+            <div class="delta-summary">
+              <div class="delta-card">
+                <div class="label">Added Items</div>
+                <div class="metric-value delta-added mono">${state.comparison.added}</div>
+              </div>
+              <div class="delta-card">
+                <div class="label">Removed Items</div>
+                <div class="metric-value delta-removed mono">${state.comparison.removed}</div>
+              </div>
+              <div class="delta-card">
+                <div class="label">Changed Items</div>
+                <div class="metric-value delta-changed mono">${state.comparison.changed}</div>
+              </div>
+              <div class="delta-card">
+                <div class="label">Total Cost Delta</div>
+                <div class="metric-value delta-neutral mono">${currency(state.comparison.totalCostDelta)}</div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Change Type</th>
+                    <th>Item</th>
+                    <th>Change Details</th>
+                    <th>Cost Impact</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${state.comparison.deltas.map(delta => `
+                    <tr>
+                      <td><span class="delta-chip">${escapeHtml(delta.type)}</span></td>
+                      <td>${escapeHtml(delta.item)}</td>
+                      <td>${escapeHtml(delta.details)}</td>
+                      <td class="mono">${currency(delta.costImpact)}</td>
+                    </tr>
+                  `).join("") || `
+                    <tr>
+                      <td colspan="4"><div class="empty-state">No differences detected between BOM A and BOM B.</div></td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function exportEnhancedCsv() {
+      if (!state.results.A?.items?.length) {
+        alert("Run an analysis first.");
+        return;
+      }
+      const csv = Papa.unparse(state.results.A.items.map(item => ({
+        "Part Number": item.partNumber,
+        Description: item.description,
+        Quantity: item.quantity,
+        Unit: item.unit,
+        Material: item.material,
+        Notes: item.notes,
+        EstimatedUnitCost: item.estimatedUnitCost,
+        EstimatedTotalCost: item.estimatedTotalCost,
+        CostConfidence: item.costConfidence,
+        CommonSuppliers: (item.commonSuppliers || []).join(" | "),
+        LeadTimeEstimate: item.leadTimeEstimate,
+        AINotes: item.analysisNotes
+      })));
+      downloadFile(csv, "procureai-enhanced-bom.csv", "text/csv;charset=utf-8;");
+    }
+
+    function downloadFile(content, fileName, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function buildReport() {
+      const result = state.results.A;
+      if (!result) return;
+      const comparisonBlock = state.compareMode && state.results.B ? `
+        <div class="report-block">
+          <h3>Comparison Snapshot</h3>
+          <p>BOM B total estimated cost: <strong>${currency(state.results.B.totalEstimatedCost)}</strong></p>
+          <p>Cost delta versus BOM A: <strong>${currency(state.comparison.totalCostDelta)}</strong></p>
+          <p>Added: ${state.comparison.added} | Removed: ${state.comparison.removed} | Changed: ${state.comparison.changed}</p>
+        </div>
+      ` : "";
+
+      document.getElementById("reportContent").innerHTML = `
+        <div class="report-header">
+          <div>
+            <div class="label" style="color:#3457a6;">ProcureAI Procurement Summary</div>
+            <h2 style="margin:4px 0 8px;">Engineering BOM Cost Intelligence Report</h2>
+            <p style="margin:0; color:#4b5d89;">Generated ${new Date().toLocaleString()} using ${escapeHtml(result.source || state.lastSource)} for cost estimation.</p>
+          </div>
+          <div class="report-block" style="min-width:240px;">
+            <div class="label" style="color:#3457a6;">Key Metrics</div>
+            <p><strong>Total Items:</strong> ${result.items.length}</p>
+            <p><strong>Estimated Cost:</strong> ${currency(result.totalEstimatedCost)}</p>
+            <p><strong>Potential Savings:</strong> ${currency(result.totalPotentialSavings)}</p>
+            <p><strong>Overall Confidence:</strong> ${overallConfidence(result.items)}</p>
+          </div>
+        </div>
+        <div class="report-grid">
+          <div class="report-block">
+            <h3>Category Breakdown</h3>
+            <table class="report-table">
+              <thead>
+                <tr><th>Category</th><th>Total Cost</th><th>Share</th></tr>
+              </thead>
+              <tbody>
+                ${result.costBreakdownByCategory.map(item => `
+                  <tr>
+                    <td>${escapeHtml(item.category)}</td>
+                    <td>${currency(item.totalCost)}</td>
+                    <td>${item.percentage}%</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="report-block">
+            <h3>Top Cost Drivers</h3>
+            ${result.topCostDrivers.map(item => `
+              <p><strong>${escapeHtml(item.partDescription)}</strong> | ${currency(item.cost)}<br>${escapeHtml(item.savingsTip)}</p>
+            `).join("<hr style='border:none;border-top:1px solid #e7ecfb;margin:12px 0;'>")}
+          </div>
+          <div class="report-block">
+            <h3>Smart Alternatives</h3>
+            ${result.alternativeSuggestions.map(item => `
+              <p><strong>${escapeHtml(item.originalItem)}</strong><br>
+              Alt: ${escapeHtml(item.alternativeItem)}<br>
+              Savings: ${currency(item.estimatedSavings)}<br>
+              Tradeoff: ${escapeHtml(item.tradeoff)}</p>
+            `).join("<hr style='border:none;border-top:1px solid #e7ecfb;margin:12px 0;'>")}
+          </div>
+          <div class="report-block">
+            <h3>Procurement Risks</h3>
+            ${result.procurementRisks.map(risk => `<p>• ${escapeHtml(risk)}</p>`).join("")}
+            <p style="margin-top:14px;"><strong>Disclaimer:</strong> Cost estimates are AI-generated approximations. Verify with actual supplier quotes before purchasing.</p>
+          </div>
+          ${comparisonBlock}
+        </div>
+      `;
+    }
+
+    function openReportModal() {
+      if (!state.results.A) {
+        alert("Run an analysis first.");
+        return;
+      }
+      buildReport();
+      document.getElementById("reportModal").classList.add("active");
+    }
+
+    function closeReportModal() {
+      document.getElementById("reportModal").classList.remove("active");
+    }
+
+    function showLoading() {
+      const overlay = document.getElementById("loadingOverlay");
+      const progressBar = document.getElementById("progressBar");
+      const loadingPercent = document.getElementById("loadingPercent");
+      const loadingMessage = document.getElementById("loadingMessage");
+      let progress = 0;
+      let messageIndex = 0;
+      overlay.classList.add("active");
+      progressBar.style.width = "0%";
+      loadingPercent.textContent = "0%";
+      loadingMessage.textContent = LOADING_MESSAGES[0];
+      clearInterval(state.loadingTimer);
+      clearInterval(state.loadingMessageTimer);
+      state.loadingTimer = setInterval(() => {
+        progress = Math.min(progress + Math.random() * 18, 94);
+        progressBar.style.width = `${progress}%`;
+        loadingPercent.textContent = `${Math.round(progress)}%`;
+      }, 380);
+      state.loadingMessageTimer = setInterval(() => {
+        messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+        loadingMessage.textContent = LOADING_MESSAGES[messageIndex];
+      }, 1100);
+    }
+
+    function hideLoading() {
+      const overlay = document.getElementById("loadingOverlay");
+      const progressBar = document.getElementById("progressBar");
+      const loadingPercent = document.getElementById("loadingPercent");
+      clearInterval(state.loadingTimer);
+      clearInterval(state.loadingMessageTimer);
+      progressBar.style.width = "100%";
+      loadingPercent.textContent = "100%";
+      setTimeout(() => overlay.classList.remove("active"), 250);
+    }
+
+    function loadDemoBom() {
+      state.compareMode = false;
+      document.getElementById("compareToggle").checked = false;
+      document.getElementById("inputsLayout").classList.remove("compare");
+      document.getElementById("panelB").classList.add("hidden");
+      updateStatus("statusCompare", "Off");
+      setRows("A", DEMO_BOM, "manual");
+      renderManualRows("A", DEMO_BOM);
+      state.results.B = null;
+      state.comparison = null;
+      analyzeBom();
+    }
+
+    function clearCurrentData() {
+      state.bomData = { A: [], B: [] };
+      state.csvRaw = { A: [], B: [] };
+      state.csvHeaders = { A: [], B: [] };
+      state.csvMapping = { A: {}, B: {} };
+      state.results = { A: null, B: null };
+      state.comparison = null;
+      renderManualRows("A", createEmptyRows(3));
+      renderManualRows("B", createEmptyRows(3));
+      ["A", "B"].forEach(panel => {
+        document.getElementById(`mappingSection${panel}`).classList.add("hidden");
+        document.getElementById(`mappingSection${panel}`).innerHTML = "";
+        document.getElementById(`csvPreviewSection${panel}`).classList.add("hidden");
+        document.getElementById(`csvPreviewSection${panel}`).innerHTML = "";
+        document.getElementById(`pastePreviewSection${panel}`).classList.add("hidden");
+        document.getElementById(`pastePreviewSection${panel}`).innerHTML = "";
+        document.getElementById(`pasteArea${panel}`).value = "";
+        const input = document.getElementById(`csvInput${panel}`);
+        if (input) input.value = "";
+      });
+      document.getElementById("resultsSection").classList.add("hidden");
+      document.getElementById("summaryGrid").innerHTML = "";
+      document.getElementById("resultsTable").innerHTML = "";
+      document.getElementById("breakdownList").innerHTML = "";
+      document.getElementById("costDrivers").innerHTML = "";
+      document.getElementById("alternativesPanel").innerHTML = "";
+      document.getElementById("risksPanel").innerHTML = "";
+      document.getElementById("comparisonSummary").innerHTML = "";
+      document.getElementById("comparisonSummary").classList.add("hidden");
+      if (state.chart) {
+        state.chart.destroy();
+        state.chart = null;
+      }
+      updateStatus("statusMapping", "Ready");
+      updateStatus("statusSource", "Demo-ready");
+    }
+
+    function setupButtons() {
+      document.getElementById("analyzeBtn").addEventListener("click", analyzeBom);
+      document.getElementById("demoBtn").addEventListener("click", loadDemoBom);
+      document.getElementById("clearBtn").addEventListener("click", clearCurrentData);
+      document.getElementById("exportCsvBtn").addEventListener("click", exportEnhancedCsv);
+      document.getElementById("reportBtn").addEventListener("click", openReportModal);
+      document.getElementById("closeModalBtn").addEventListener("click", closeReportModal);
+      document.getElementById("printBtn").addEventListener("click", () => window.print());
+      document.getElementById("reportModal").addEventListener("click", event => {
+        if (event.target.id === "reportModal") closeReportModal();
+      });
+    }
+
+    function init() {
+      setupTabs();
+      setupFileInputs();
+      setupManualActions();
+      setupCompareMode();
+      setupButtons();
+      initManualTables();
+      loadDemoBom();
+    }
+
+    init();
+  </script>
+</body>
+</html>
