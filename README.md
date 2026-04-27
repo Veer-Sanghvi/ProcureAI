@@ -1,18 +1,43 @@
 # ProcureAI
 
-ProcureAI is a single-page BOM cost intelligence web app for engineering students and small project teams. It lets users upload, enter, or paste a Bill of Materials, estimate pricing and procurement risks with AI, compare two BOM revisions, export an enhanced CSV, and generate a print-ready procurement summary.
+ProcureAI is a Next.js 14 App Router application for AI-powered Bill of Materials cost intelligence. It is designed for engineering students and small project teams who need quick BOM pricing estimates, supplier hints, cost breakdowns, procurement risks, and revision-to-revision comparison.
 
-## How to use
+## Stack
 
-1. Open `index.html` in a browser.
-2. Load BOM data with `CSV Upload`, `Manual Entry`, or `Paste Table`.
-3. Click `Analyze BOM` to run the cost analysis.
-4. Use `Load Demo BOM` to instantly populate a hydraulic actuator BOM and auto-run the analysis.
-5. Export the enhanced BOM as CSV or generate the printable procurement report.
+- Next.js 14 App Router
+- Vercel AI SDK with `streamObject`
+- OpenAI `gpt-4o`
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Recharts
+- shadcn/ui + selected 21st.dev components
 
-## Notes
+## Local setup
 
-- The app is built with HTML, CSS, and vanilla JavaScript.
-- PapaParse and Chart.js are loaded from CDN.
-- OpenAI API usage is configured in the `CONFIG` object at the top of the JavaScript in `index.html`.
-- If no OpenAI API key is present, the app falls back to a built-in local estimator so the demo still works immediately.
+1. Install dependencies with `npm install`
+2. Add `.env.local` in the project root:
+
+```env
+OPENAI_API_KEY=your_key_here
+```
+
+3. Run the dev server:
+
+```bash
+npm run dev
+```
+
+4. Open `http://localhost:3000`
+
+## Features
+
+- CSV upload with BOM column mapping
+- Manual BOM entry with dynamic rows
+- Paste-from-spreadsheet parsing
+- Streaming AI BOM analysis
+- Cost breakdown charting and cost-driver insights
+- AI alternatives and procurement risk surfacing
+- Side-by-side BOM comparison mode
+- CSV export and printable procurement summary
+- Hydraulic actuator demo BOM with one-click analysis
