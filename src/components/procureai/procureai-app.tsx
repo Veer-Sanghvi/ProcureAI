@@ -415,20 +415,39 @@ export function ProcureAIApp() {
           <BorderBeam size={320} duration={18} colorFrom="#0066ff" colorTo="#20c997" />
           <div className="grid gap-8 lg:grid-cols-[1.08fr_0.92fr]">
             <div className="relative z-10 space-y-6">
-              <AnimatedGradientText className="mx-0 rounded-full bg-[#0b1020]/70 px-5 py-2 text-[#dce9ff]">
-                BOM cost intelligence for engineering teams
-              </AnimatedGradientText>
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+                <AnimatedGradientText className="mx-0 rounded-full bg-[#0b1020]/70 px-5 py-2 text-[#dce9ff]">
+                  BOM cost intelligence for engineering teams
+                </AnimatedGradientText>
+              </motion.div>
               <div className="space-y-4">
-                <h1 className="font-mono text-5xl font-semibold tracking-[-0.08em] text-white sm:text-6xl lg:text-7xl">
+                <motion.h1
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.1 }}
+                  className="font-mono text-5xl font-semibold tracking-[-0.08em] text-white sm:text-6xl lg:text-7xl"
+                >
                   ProcureAI
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg">
-                  Stream line-item pricing, uncover savings, and compare engineering
-                  BOM revisions before procurement decisions harden.
-                </p>
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  className="max-w-2xl text-base leading-7 text-slate-300 md:text-lg"
+                >
+                  Engineering teams spend weeks chasing supplier quotes before they know if a design
+                  is even affordable. ProcureAI streams live cost intelligence across any Bill of
+                  Materials with line-item pricing, lead times, and savings opportunities the moment
+                  you paste your parts list. Stop guessing. Start building.
+                </motion.p>
               </div>
 
-              <div className="flex flex-wrap gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.3 }}
+                className="flex flex-wrap gap-3"
+              >
                 {["CSV / Manual / Paste", "OpenAI gpt-4o", "Cost, Risk, Savings"].map((label) => (
                   <Badge
                     key={label}
@@ -437,9 +456,14 @@ export function ProcureAIApp() {
                     {label}
                   </Badge>
                 ))}
-              </div>
+              </motion.div>
 
-              <div className="flex flex-wrap gap-3">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.4 }}
+                className="flex flex-wrap gap-3"
+              >
                 <ShimmerButton
                   className="bg-[#0066ff] px-6 py-3 text-sm font-semibold text-white"
                   onClick={loadDemoBom}
@@ -452,7 +476,7 @@ export function ProcureAIApp() {
                 <Button variant="outline" className="border-white/12 bg-transparent text-white" onClick={clearAll}>
                   Clear Data
                 </Button>
-              </div>
+              </motion.div>
 
               <div className="grid gap-4 md:grid-cols-3">
                 <TiltedCard>
