@@ -66,8 +66,9 @@ body {
 @media (max-width: 479px) { .nav-link { display: none; } }
 
 /* Content */
-main { padding: 48px 0 72px; }
-@media (min-width: 640px) { main { padding: 64px 0 96px; } }
+/* main.wrap: `.wrap` alone would zero the vertical padding (class beats element) */
+main.wrap { padding-top: 48px; padding-bottom: 96px; }
+@media (max-width: 600px) { main.wrap { padding-top: 32px; padding-bottom: 72px; } }
 
 h1, h2, h3, h4, h5, h6 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; color: var(--text); margin: 0; }
 h1 { font-size: clamp(30px, 6vw, 42px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: 20px; }
